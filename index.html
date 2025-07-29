@@ -114,19 +114,7 @@
                 firebase.initializeApp(firebaseConfig);
                 database = firebase.database();
                 firebaseInitialized = true;
-                
-                // Ajout du débogage
                 console.log("Firebase initialisé avec succès");
-                console.log("Database URL:", database.ref().toString());
-                
-                // Test de connexion
-                database.ref('.info/connected').on('value', function(snap) {
-                    if (snap.val() === true) {
-                        console.log("Connecté à Firebase");
-                    } else {
-                        console.log("Déconnecté de Firebase");
-                    }
-                });
             } else {
                 console.error("Firebase non disponible");
             }
@@ -169,40 +157,27 @@
                 const loadData = async () => {
                     if (database) {
                         try {
-                            console.log("Tentative de chargement des données depuis Firebase...");
+                            console.log("Chargement des données depuis Firebase...");
                             const snapshot = await database.ref('kiaRio').once('value');
                             const data = snapshot.val();
-                            console.log("Données reçues de Firebase:", data);
+                            console.log("Données chargées:", data);
                             
                             if (data) {
                                 if (data.kilometrage !== undefined) {
                                     setCurrentKilometrage(data.kilometrage);
-                                    console.log("Kilométrage chargé:", data.kilometrage);
                                 }
                                 if (data.entretiens) {
                                     setEntretiens(data.entretiens);
-                                    console.log("Entretiens chargés:", data.entretiens);
                                 }
                             }
                             setIsOnline(true);
                             setSyncStatus('synchronisé');
-                            setSyncMessage('Données chargées depuis le cloud');
-                            
-                            // Test d'écriture
-                            database.ref('kiaRio/test').set('connexion_ok')
-                                .then(() => {
-                                    console.log("Test d'écriture réussi");
-                                })
-                                .catch(error => {
-                                    console.error("Erreur d'écriture:", error);
-                                });
+                            setSyncMessage('Données chargées');
                         } catch (error) {
-                            console.error('Erreur Firebase:', error);
-                            loadFromLocalStorage();
+                            console.error('Erreur de chargement:', error);
+                            setSyncStatus('erreur');
+                            setSyncMessage('Erreur de chargement');
                         }
-                    } else {
-                        console.log("Firebase non disponible, chargement depuis localStorage");
-                        loadFromLocalStorage();
                     }
                 };
                 
@@ -210,10 +185,9 @@
                 
                 // Écouter les changements en temps réel
                 if (database) {
-                    console.log("Mise en place de l'écoute des changements en temps réel");
                     const unsubscribe = database.ref('kiaRio').on('value', (snapshot) => {
                         const data = snapshot.val();
-                        console.log("Données mises à jour reçues:", data);
+                        console.log("Données mises à jour:", data);
                         if (data) {
                             if (data.kilometrage !== undefined) {
                                 setCurrentKilometrage(data.kilometrage);
@@ -223,81 +197,41 @@
                             }
                         }
                         setSyncStatus('synchronisé');
-                        setSyncMessage('Données synchronisées');
-                        setTimeout(() => setSyncMessage(''), 3000);
                     }, (error) => {
-                        console.error("Erreur d'écoute Firebase:", error);
+                        console.error("Erreur d'écoute:", error);
                     });
                     
-                    return () => {
-                        console.log("Nettoyage de l'écoute Firebase");
-                        unsubscribe();
-                    };
+                    return () => unsubscribe();
                 }
             }, []);
 
-            // Charger depuis localStorage (fallback)
-            const loadFromLocalStorage = () => {
-                console.log("Chargement depuis localStorage");
-                const savedKilometrage = localStorage.getItem('kiaRioKilometrage');
-                const savedEntretiens = localStorage.getItem('kiaRioEntretiens');
-                
-                if (savedKilometrage) {
-                    setCurrentKilometrage(parseInt(savedKilometrage));
-                    console.log("Kilométrage local chargé:", savedKilometrage);
-                }
-                
-                if (savedEntretiens) {
+            // Fonction de sauvegarde manuelle
+            const saveToCloud = async () => {
+                if (database) {
                     try {
-                        setEntretiens(JSON.parse(savedEntretiens));
-                        console.log("Entretiens locaux chargés:", JSON.parse(savedEntretiens));
+                        setSyncStatus('sauvegarde...');
+                        setSyncMessage('Sauvegarde en cours');
+                        
+                        await database.ref('kiaRio').set({
+                            kilometrage: currentKilometrage,
+                            entretiens: entretiens
+                        });
+                        
+                        setSyncStatus('synchronisé');
+                        setSyncMessage('Données sauvegardées');
+                        setTimeout(() => setSyncMessage(''), 3000);
+                        
+                        console.log("Données sauvegardées avec succès");
                     } catch (error) {
-                        console.error('Erreur lors du chargement des entretiens:', error);
-                        setEntretiens([]);
+                        console.error('Erreur de sauvegarde:', error);
+                        setSyncStatus('erreur');
+                        setSyncMessage('Erreur de sauvegarde');
                     }
+                } else {
+                    setSyncStatus('hors ligne');
+                    setSyncMessage('Firebase non disponible');
                 }
-                setSyncStatus('hors ligne');
-                setSyncMessage('Mode hors ligne - données locales');
             };
-
-            // Sauvegarder les données
-            useEffect(() => {
-                if (database && isOnline) {
-                    const saveToFirebase = async () => {
-                        try {
-                            console.log("Sauvegarde du kilométrage:", currentKilometrage);
-                            await database.ref('kiaRio').update({
-                                kilometrage: currentKilometrage
-                            });
-                            console.log("Kilométrage sauvegardé avec succès");
-                        } catch (error) {
-                            console.error('Erreur de sauvegarde kilometrage:', error);
-                        }
-                    };
-                    saveToFirebase();
-                }
-                localStorage.setItem('kiaRioKilometrage', currentKilometrage.toString());
-                console.log("Kilométrage sauvegardé dans localStorage:", currentKilometrage);
-            }, [currentKilometrage, isOnline]);
-
-            useEffect(() => {
-                if (database && isOnline) {
-                    const saveToFirebase = async () => {
-                        try {
-                            console.log("Sauvegarde des entretiens:", entretiens);
-                            await database.ref('kiaRio').update({
-                                entretiens: entretiens
-                            });
-                            console.log("Entretiens sauvegardés avec succès");
-                        } catch (error) {
-                            console.error('Erreur de sauvegarde entretiens:', error);
-                        }
-                    };
-                    saveToFirebase();
-                }
-                localStorage.setItem('kiaRioEntretiens', JSON.stringify(entretiens));
-                console.log("Entretiens sauvegardés dans localStorage");
-            }, [entretiens, isOnline]);
 
             // Calculs pour le tableau de bord
             const totalEntretiens = entretiens.length;
@@ -464,46 +398,6 @@
                 }).format(amount);
             };
 
-            // Fonction pour exporter les données
-            const exportData = () => {
-                const data = {
-                    entretiens: entretiens,
-                    kilometrage: currentKilometrage,
-                    dateExport: new Date().toISOString()
-                };
-                const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `entretiens-kia-rio-${new Date().toISOString().split('T')[0]}.json`;
-                a.click();
-            };
-
-            // Fonction pour importer les données
-            const importData = (event) => {
-                const file = event.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        try {
-                            const data = JSON.parse(e.target.result);
-                            if (data.entretiens && Array.isArray(data.entretiens)) {
-                                setEntretiens(data.entretiens);
-                            }
-                            if (typeof data.kilometrage === 'number') {
-                                setCurrentKilometrage(data.kilometrage);
-                            }
-                            alert('Données importées avec succès!');
-                        } catch (error) {
-                            alert('Fichier invalide. Veuillez sélectionner un fichier JSON valide.');
-                        }
-                    };
-                    reader.readAsText(file);
-                }
-                // Réinitialiser l'input file
-                event.target.value = '';
-            };
-
             // Fonction pour réinitialiser toutes les données
             const resetData = () => {
                 if (confirm('Êtes-vous sûr de vouloir réinitialiser toutes les données ?')) {
@@ -512,8 +406,6 @@
                     if (database) {
                         database.ref('kiaRio').remove();
                     }
-                    localStorage.removeItem('kiaRioKilometrage');
-                    localStorage.removeItem('kiaRioEntretiens');
                 }
             };
 
@@ -533,6 +425,8 @@
                         return 'bg-gray-500 text-white';
                     case 'erreur':
                         return 'bg-red-500 text-white';
+                    case 'sauvegarde...':
+                        return 'bg-blue-500 text-white';
                     default:
                         return 'bg-yellow-500 text-white';
                 }
@@ -542,7 +436,7 @@
                 <div className="min-h-screen bg-gray-50">
                     {/* Indicateur de synchronisation */}
                     <div className={`sync-status ${getStatusColor()}`}>
-                        <i className={`fas ${syncStatus === 'synchronisé' ? 'fa-sync-alt fa-spin' : syncStatus === 'connecté' ? 'fa-wifi' : 'fa-exclamation-circle'}`}></i>
+                        <i className={`fas ${syncStatus === 'synchronisé' ? 'fa-sync-alt' : syncStatus === 'sauvegarde...' ? 'fa-spinner fa-spin' : syncStatus === 'connecté' ? 'fa-wifi' : 'fa-exclamation-circle'}`}></i>
                         <span className="ml-2">{syncStatus}</span>
                         {syncMessage && <span className="ml-2">• {syncMessage}</span>}
                     </div>
@@ -586,26 +480,20 @@
                                 </button>
                             ))}
                             
-                            {/* Boutons d'export/import */}
+                            {/* Bouton de sauvegarde */}
                             <div className="px-6 py-4 border-t mt-4">
                                 <button
-                                    onClick={exportData}
-                                    className="w-full flex items-center space-x-2 px-4 py-2 text-left text-sm text-gray-600 hover:bg-gray-50 rounded"
+                                    onClick={saveToCloud}
+                                    disabled={!firebaseInitialized}
+                                    className={`w-full flex items-center justify-center space-x-2 px-4 py-2 text-left text-sm rounded ${
+                                        firebaseInitialized 
+                                            ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    }`}
                                 >
-                                    <i className="fas fa-download"></i>
-                                    <span>Exporter données</span>
+                                    <i className="fas fa-cloud-upload-alt"></i>
+                                    <span>Sauvegarder dans le cloud</span>
                                 </button>
-                                
-                                <label className="w-full flex items-center space-x-2 px-4 py-2 text-left text-sm text-gray-600 hover:bg-gray-50 rounded cursor-pointer mt-2">
-                                    <i className="fas fa-upload"></i>
-                                    <span>Importer données</span>
-                                    <input
-                                        type="file"
-                                        accept=".json"
-                                        onChange={importData}
-                                        className="hidden"
-                                    />
-                                </label>
                                 
                                 <button
                                     onClick={resetData}
@@ -621,9 +509,6 @@
                                 <div className="flex items-center">
                                     <i className={`fas ${isOnline ? 'fa-circle text-green-500' : 'fa-circle text-gray-400'} mr-2`}></i>
                                     <span>{isOnline ? 'Connecté au cloud' : 'Hors ligne'}</span>
-                                </div>
-                                <div className="mt-1">
-                                    <span>Dernière synchro: {new Date().toLocaleTimeString()}</span>
                                 </div>
                             </div>
                         </nav>
@@ -668,32 +553,23 @@
                                         </button>
                                     ))}
                                     
-                                    {/* Boutons d'export/import mobile */}
+                                    {/* Bouton de sauvegarde mobile */}
                                     <div className="px-6 py-4 border-t mt-4">
                                         <button
                                             onClick={() => {
-                                                exportData();
+                                                saveToCloud();
                                                 setSidebarOpen(false);
                                             }}
-                                            className="w-full flex items-center space-x-2 px-4 py-2 text-left text-sm text-gray-600 hover:bg-gray-50 rounded"
+                                            disabled={!firebaseInitialized}
+                                            className={`w-full flex items-center justify-center space-x-2 px-4 py-2 text-left text-sm rounded ${
+                                                firebaseInitialized 
+                                                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            }`}
                                         >
-                                            <i className="fas fa-download"></i>
-                                            <span>Exporter données</span>
+                                            <i className="fas fa-cloud-upload-alt"></i>
+                                            <span>Sauvegarder</span>
                                         </button>
-                                        
-                                        <label className="w-full flex items-center space-x-2 px-4 py-2 text-left text-sm text-gray-600 hover:bg-gray-50 rounded cursor-pointer mt-2">
-                                            <i className="fas fa-upload"></i>
-                                            <span>Importer données</span>
-                                            <input
-                                                type="file"
-                                                accept=".json"
-                                                onChange={(e) => {
-                                                    importData(e);
-                                                    setSidebarOpen(false);
-                                                }}
-                                                className="hidden"
-                                            />
-                                        </label>
                                         
                                         <button
                                             onClick={() => {
@@ -712,9 +588,6 @@
                                         <div className="flex items-center">
                                             <i className={`fas ${isOnline ? 'fa-circle text-green-500' : 'fa-circle text-gray-400'} mr-2`}></i>
                                             <span>{isOnline ? 'Connecté au cloud' : 'Hors ligne'}</span>
-                                        </div>
-                                        <div className="mt-1">
-                                            <span>Dernière synchro: {new Date().toLocaleTimeString()}</span>
                                         </div>
                                     </div>
                                 </nav>
