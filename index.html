@@ -114,6 +114,21 @@
                 firebase.initializeApp(firebaseConfig);
                 database = firebase.database();
                 firebaseInitialized = true;
+                
+                // Ajout du débogage
+                console.log("Firebase initialisé avec succès");
+                console.log("Database URL:", database.ref().toString());
+                
+                // Test de connexion
+                database.ref('.info/connected').on('value', function(snap) {
+                    if (snap.val() === true) {
+                        console.log("Connecté à Firebase");
+                    } else {
+                        console.log("Déconnecté de Firebase");
+                    }
+                });
+            } else {
+                console.error("Firebase non disponible");
             }
         } catch (error) {
             console.error('Firebase initialization error:', error);
@@ -154,25 +169,39 @@
                 const loadData = async () => {
                     if (database) {
                         try {
+                            console.log("Tentative de chargement des données depuis Firebase...");
                             const snapshot = await database.ref('kiaRio').once('value');
                             const data = snapshot.val();
+                            console.log("Données reçues de Firebase:", data);
                             
                             if (data) {
                                 if (data.kilometrage !== undefined) {
                                     setCurrentKilometrage(data.kilometrage);
+                                    console.log("Kilométrage chargé:", data.kilometrage);
                                 }
                                 if (data.entretiens) {
                                     setEntretiens(data.entretiens);
+                                    console.log("Entretiens chargés:", data.entretiens);
                                 }
                             }
                             setIsOnline(true);
                             setSyncStatus('synchronisé');
                             setSyncMessage('Données chargées depuis le cloud');
+                            
+                            // Test d'écriture
+                            database.ref('kiaRio/test').set('connexion_ok')
+                                .then(() => {
+                                    console.log("Test d'écriture réussi");
+                                })
+                                .catch(error => {
+                                    console.error("Erreur d'écriture:", error);
+                                });
                         } catch (error) {
                             console.error('Erreur Firebase:', error);
                             loadFromLocalStorage();
                         }
                     } else {
+                        console.log("Firebase non disponible, chargement depuis localStorage");
                         loadFromLocalStorage();
                     }
                 };
@@ -181,8 +210,10 @@
                 
                 // Écouter les changements en temps réel
                 if (database) {
+                    console.log("Mise en place de l'écoute des changements en temps réel");
                     const unsubscribe = database.ref('kiaRio').on('value', (snapshot) => {
                         const data = snapshot.val();
+                        console.log("Données mises à jour reçues:", data);
                         if (data) {
                             if (data.kilometrage !== undefined) {
                                 setCurrentKilometrage(data.kilometrage);
@@ -194,24 +225,32 @@
                         setSyncStatus('synchronisé');
                         setSyncMessage('Données synchronisées');
                         setTimeout(() => setSyncMessage(''), 3000);
+                    }, (error) => {
+                        console.error("Erreur d'écoute Firebase:", error);
                     });
                     
-                    return () => unsubscribe();
+                    return () => {
+                        console.log("Nettoyage de l'écoute Firebase");
+                        unsubscribe();
+                    };
                 }
             }, []);
 
             // Charger depuis localStorage (fallback)
             const loadFromLocalStorage = () => {
+                console.log("Chargement depuis localStorage");
                 const savedKilometrage = localStorage.getItem('kiaRioKilometrage');
                 const savedEntretiens = localStorage.getItem('kiaRioEntretiens');
                 
                 if (savedKilometrage) {
                     setCurrentKilometrage(parseInt(savedKilometrage));
+                    console.log("Kilométrage local chargé:", savedKilometrage);
                 }
                 
                 if (savedEntretiens) {
                     try {
                         setEntretiens(JSON.parse(savedEntretiens));
+                        console.log("Entretiens locaux chargés:", JSON.parse(savedEntretiens));
                     } catch (error) {
                         console.error('Erreur lors du chargement des entretiens:', error);
                         setEntretiens([]);
@@ -226,9 +265,11 @@
                 if (database && isOnline) {
                     const saveToFirebase = async () => {
                         try {
+                            console.log("Sauvegarde du kilométrage:", currentKilometrage);
                             await database.ref('kiaRio').update({
                                 kilometrage: currentKilometrage
                             });
+                            console.log("Kilométrage sauvegardé avec succès");
                         } catch (error) {
                             console.error('Erreur de sauvegarde kilometrage:', error);
                         }
@@ -236,15 +277,18 @@
                     saveToFirebase();
                 }
                 localStorage.setItem('kiaRioKilometrage', currentKilometrage.toString());
+                console.log("Kilométrage sauvegardé dans localStorage:", currentKilometrage);
             }, [currentKilometrage, isOnline]);
 
             useEffect(() => {
                 if (database && isOnline) {
                     const saveToFirebase = async () => {
                         try {
+                            console.log("Sauvegarde des entretiens:", entretiens);
                             await database.ref('kiaRio').update({
                                 entretiens: entretiens
                             });
+                            console.log("Entretiens sauvegardés avec succès");
                         } catch (error) {
                             console.error('Erreur de sauvegarde entretiens:', error);
                         }
@@ -252,6 +296,7 @@
                     saveToFirebase();
                 }
                 localStorage.setItem('kiaRioEntretiens', JSON.stringify(entretiens));
+                console.log("Entretiens sauvegardés dans localStorage");
             }, [entretiens, isOnline]);
 
             // Calculs pour le tableau de bord
