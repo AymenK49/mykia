@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kia Rio - Suivi d'Entretien</title>
+    <title>Suivi d'Entretien Véhicule</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -132,6 +132,7 @@
             const [currentView, setCurrentView] = useState('dashboard');
             const [currentKilometrage, setCurrentKilometrage] = useState(0);
             const [entretiens, setEntretiens] = useState([]);
+            const [consommations, setConsommations] = useState([]);
             const [isOnline, setIsOnline] = useState(firebaseInitialized);
             const [syncStatus, setSyncStatus] = useState(firebaseInitialized ? 'connecté' : 'hors ligne');
             const [syncMessage, setSyncMessage] = useState('');
@@ -145,6 +146,7 @@
             const [confirmPassword, setConfirmPassword] = useState('');
             const [authError, setAuthError] = useState('');
 
+            // États pour les formulaires
             const [formData, setFormData] = useState({
                 type: 'vidange',
                 date: '',
@@ -158,6 +160,17 @@
                     filtreHuile: false
                 },
                 notes: ''
+            });
+
+            const [formDataConso, setFormDataConso] = useState({
+                type: 'kiosque',
+                date: '',
+                kmAvant: '',
+                kmApres: '',
+                quantite: '',
+                prixUnitaire: '2.525',
+                montantTotal: '',
+                station: ''
             });
 
             const [searchTerm, setSearchTerm] = useState('');
@@ -188,18 +201,23 @@
                     const loadData = async () => {
                         try {
                             console.log("Chargement des données depuis Firebase pour l'utilisateur:", user.uid);
-                            const snapshot = await database.ref(`users/${user.uid}/kiaRio`).once('value');
-                            const data = snapshot.val();
-                            console.log("Données chargées:", data);
                             
-                            if (data) {
-                                if (data.kilometrage !== undefined) {
-                                    setCurrentKilometrage(data.kilometrage);
-                                }
-                                if (data.entretiens) {
-                                    setEntretiens(data.entretiens);
-                                }
+                            // Charger les entretiens
+                            const snapshotEntretiens = await database.ref(`users/${user.uid}/vehicleData/entretiens`).once('value');
+                            const dataEntretiens = snapshotEntretiens.val();
+                            
+                            // Charger les consommations
+                            const snapshotConsos = await database.ref(`users/${user.uid}/vehicleData/consommations`).once('value');
+                            const dataConsos = snapshotConsos.val();
+                            
+                            if (dataEntretiens) {
+                                setEntretiens(dataEntretiens);
                             }
+                            
+                            if (dataConsos) {
+                                setConsommations(dataConsos);
+                            }
+                            
                             setIsOnline(true);
                             setSyncStatus('synchronisé');
                             setSyncMessage('Données chargées');
@@ -213,23 +231,32 @@
                     loadData();
                     
                     // Écouter les changements en temps réel
-                    const unsubscribe = database.ref(`users/${user.uid}/kiaRio`).on('value', (snapshot) => {
+                    const unsubscribeEntretiens = database.ref(`users/${user.uid}/vehicleData/entretiens`).on('value', (snapshot) => {
                         const data = snapshot.val();
-                        console.log("Données mises à jour:", data);
+                        console.log("Entretiens mis à jour:", data);
                         if (data) {
-                            if (data.kilometrage !== undefined) {
-                                setCurrentKilometrage(data.kilometrage);
-                            }
-                            if (data.entretiens) {
-                                setEntretiens(data.entretiens);
-                            }
+                            setEntretiens(data);
                         }
                         setSyncStatus('synchronisé');
                     }, (error) => {
-                        console.error("Erreur d'écoute:", error);
+                        console.error("Erreur d'écoute entretiens:", error);
                     });
                     
-                    return () => unsubscribe();
+                    const unsubscribeConsos = database.ref(`users/${user.uid}/vehicleData/consommations`).on('value', (snapshot) => {
+                        const data = snapshot.val();
+                        console.log("Consommations mises à jour:", data);
+                        if (data) {
+                            setConsommations(data);
+                        }
+                        setSyncStatus('synchronisé');
+                    }, (error) => {
+                        console.error("Erreur d'écoute consommations:", error);
+                    });
+                    
+                    return () => {
+                        unsubscribeEntretiens();
+                        unsubscribeConsos();
+                    };
                 }
             }, [user]);
 
@@ -281,6 +308,7 @@
                     try {
                         await auth.signOut();
                         setEntretiens([]);
+                        setConsommations([]);
                         setCurrentKilometrage(0);
                         setSyncMessage('Déconnexion réussie');
                     } catch (error) {
@@ -296,9 +324,9 @@
                         setSyncStatus('sauvegarde...');
                         setSyncMessage('Sauvegarde en cours');
                         
-                        await database.ref(`users/${user.uid}/kiaRio`).set({
-                            kilometrage: currentKilometrage,
-                            entretiens: entretiens
+                        await database.ref(`users/${user.uid}/vehicleData`).update({
+                            entretiens: entretiens,
+                            consommations: consommations
                         });
                         
                         setSyncStatus('synchronisé');
@@ -321,6 +349,22 @@
             const totalEntretiens = entretiens.length;
             const coutTotal = entretiens.reduce((sum, entretien) => sum + entretien.cout, 0);
             const coutMoyen = totalEntretiens > 0 ? (coutTotal / totalEntretiens).toFixed(3) : 0;
+
+            // Calcul de la consommation moyenne
+            const calculerConsommationMoyenne = () => {
+                if (consommations.length === 0) return 0;
+                
+                const validConsos = consommations.filter(conso => 
+                    conso.consommationAux100 && !isNaN(parseFloat(conso.consommationAux100))
+                );
+                
+                if (validConsos.length === 0) return 0;
+                
+                const total = validConsos.reduce((sum, conso) => sum + parseFloat(conso.consommationAux100), 0);
+                return (total / validConsos.length).toFixed(2);
+            };
+
+            const consommationMoyenne = calculerConsommationMoyenne();
 
             // Rappels - Vidange tous les 8000 km
             const rappels = entretiens.map(entretien => {
@@ -431,12 +475,68 @@
                 setSidebarOpen(false);
             };
 
+            // Gestion du formulaire de consommation
+            const handleConsoChange = (field, value) => {
+                const updatedData = { ...formDataConso, [field]: value };
+                
+                // Calcul automatique selon le type
+                if (updatedData.type === 'kiosque') {
+                    updatedData.prixUnitaire = '2.525';
+                    if (field === 'quantite') {
+                        updatedData.montantTotal = (parseFloat(value) * 2.525).toFixed(3);
+                    } else if (field === 'montantTotal') {
+                        updatedData.quantite = (parseFloat(value) / 2.525).toFixed(2);
+                    }
+                } else {
+                    if (field === 'quantite' && updatedData.prixUnitaire) {
+                        updatedData.montantTotal = (parseFloat(value) * parseFloat(updatedData.prixUnitaire)).toFixed(3);
+                    } else if (field === 'prixUnitaire' && updatedData.quantite) {
+                        updatedData.montantTotal = (parseFloat(updatedData.quantite) * parseFloat(value)).toFixed(3);
+                    } else if (field === 'montantTotal' && updatedData.quantite && parseFloat(updatedData.quantite) > 0) {
+                        updatedData.prixUnitaire = (parseFloat(value) / parseFloat(updatedData.quantite)).toFixed(3);
+                    }
+                }
+                
+                setFormDataConso(updatedData);
+            };
+
+            const handleSubmitConso = (e) => {
+                e.preventDefault();
+                
+                // Calculer la consommation aux 100km
+                const kmParcourus = parseInt(formDataConso.kmApres) - parseInt(formDataConso.kmAvant);
+                const consommationAux100 = kmParcourus > 0 && formDataConso.quantite ? 
+                    ((parseFloat(formDataConso.quantite) / kmParcourus) * 100).toFixed(2) : 0;
+                
+                const newConso = {
+                    id: Date.now(),
+                    ...formDataConso,
+                    kmParcourus: kmParcourus,
+                    consommationAux100: consommationAux100
+                };
+                
+                setConsommations([...consommations, newConso]);
+                setFormDataConso({
+                    type: 'kiosque',
+                    date: '',
+                    kmAvant: '',
+                    kmApres: '',
+                    quantite: '',
+                    prixUnitaire: '2.525',
+                    montantTotal: '',
+                    station: ''
+                });
+                setCurrentView('dashboard');
+                setSidebarOpen(false);
+            };
+
             const getTypeIcon = (type) => {
                 switch(type) {
                     case 'vidange': return 'fa-oil-can';
                     case 'freins': return 'fa-brake';
                     case 'pneus': return 'fa-tire';
                     case 'bougies': return 'fa-bolt';
+                    case 'consommation': return 'fa-gas-pump';
                     default: return 'fa-wrench';
                 }
             };
@@ -447,6 +547,7 @@
                     case 'freins': return 'bg-red-500';
                     case 'pneus': return 'bg-green-500';
                     case 'bougies': return 'bg-yellow-500';
+                    case 'consommation': return 'bg-purple-500';
                     default: return 'bg-gray-500';
                 }
             };
@@ -468,6 +569,7 @@
                     case 'filtres': return 'Filtres';
                     case 'courroie': return 'Courroie';
                     case 'bougies': return 'Bougies';
+                    case 'consommation': return 'Consommation';
                     default: return type;
                 }
             };
@@ -486,9 +588,10 @@
             const resetData = () => {
                 if (confirm('Êtes-vous sûr de vouloir réinitialiser toutes les données ?')) {
                     setEntretiens([]);
+                    setConsommations([]);
                     setCurrentKilometrage(0);
                     if (database && user) {
-                        database.ref(`users/${user.uid}/kiaRio`).remove();
+                        database.ref(`users/${user.uid}/vehicleData`).remove();
                     }
                 }
             };
@@ -496,6 +599,7 @@
             const menuItems = [
                 { id: 'dashboard', label: 'Tableau de bord', icon: 'fa-chart-line' },
                 { id: 'ajout', label: 'Ajouter entretien', icon: 'fa-plus' },
+                { id: 'consommation', label: 'Consommation', icon: 'fa-gas-pump' },
                 { id: 'historique', label: 'Historique', icon: 'fa-history' }
             ];
 
@@ -537,8 +641,8 @@
                         <div className="bg-white rounded-lg card p-8 max-w-md w-full">
                             <div className="text-center mb-8">
                                 <i className="fas fa-car text-blue-600 text-4xl mb-4"></i>
-                                <h1 className="text-2xl font-bold text-gray-800">Kia Rio</h1>
-                                <p className="text-gray-600">Suivi d'entretien</p>
+                                <h1 className="text-2xl font-bold text-gray-800">Suivi d'Entretien Véhicule</h1>
+                                <p className="text-gray-600">Gérez l'entretien de votre voiture</p>
                             </div>
                             
                             {authMode === 'login' ? (
@@ -677,7 +781,7 @@
                 <div className="min-h-screen bg-gray-50">
                     {/* Indicateur de synchronisation */}
                     <div className={`sync-status ${getStatusColor()}`}>
-                        <i className={`fas ${syncStatus === 'synchronisé' ? 'fa-sync-alt' : syncStatus === 'sauvegarde...' ? 'fa-spinner fa-spin' : syncStatus === 'connexion...' || syncStatus === 'inscription...' ? 'fa-spinner fa-spin' : syncStatus === 'connecté' ? 'fa-wifi' : 'fa-exclamation-circle'}`}></i>
+                        <i className={`fas ${syncStatus === 'synchronisé' ? 'fa-sync-alt fa-spin' : syncStatus === 'sauvegarde...' ? 'fa-spinner fa-spin' : syncStatus === 'connexion...' || syncStatus === 'inscription...' ? 'fa-spinner fa-spin' : syncStatus === 'connecté' ? 'fa-wifi' : 'fa-exclamation-circle'}`}></i>
                         <span className="ml-2">{syncStatus}</span>
                         {syncMessage && <span className="ml-2">• {syncMessage}</span>}
                     </div>
@@ -698,8 +802,8 @@
                             <div className="flex items-center space-x-3">
                                 <i className="fas fa-car text-blue-600 text-2xl"></i>
                                 <div>
-                                    <h1 className="text-xl font-bold text-gray-800">Kia Rio</h1>
-                                    <p className="text-sm text-gray-500">Suivi d'entretien</p>
+                                    <h1 className="text-xl font-bold text-gray-800">Suivi Véhicule</h1>
+                                    <p className="text-sm text-gray-500">Gestion d'entretien</p>
                                     {user && (
                                         <p className="text-xs text-gray-400 mt-1 truncate">{user.email}</p>
                                     )}
@@ -724,7 +828,7 @@
                                 </button>
                             ))}
                             
-                            {/* Bouton de sauvegarde */}
+                            {/* Boutons d'export/import */}
                             <div className="px-6 py-4 border-t mt-4">
                                 <button
                                     onClick={saveToCloud}
@@ -778,8 +882,8 @@
                                         <div className="flex items-center space-x-3">
                                             <i className="fas fa-car text-blue-600 text-2xl"></i>
                                             <div>
-                                                <h1 className="text-xl font-bold text-gray-800">Kia Rio</h1>
-                                                <p className="text-sm text-gray-500">Suivi d'entretien</p>
+                                                <h1 className="text-xl font-bold text-gray-800">Suivi Véhicule</h1>
+                                                <p className="text-sm text-gray-500">Gestion d'entretien</p>
                                                 {user && (
                                                     <p className="text-xs text-gray-400 mt-1 truncate">{user.email}</p>
                                                 )}
@@ -811,7 +915,7 @@
                                         </button>
                                     ))}
                                     
-                                    {/* Bouton de sauvegarde mobile */}
+                                    {/* Boutons d'export/import mobile */}
                                     <div className="px-6 py-4 border-t mt-4">
                                         <button
                                             onClick={() => {
@@ -914,10 +1018,10 @@
                                         <div className="bg-white rounded-lg card p-4 md:p-6 hover:shadow-lg transition-shadow">
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <p className="text-sm text-gray-500">Coût moyen</p>
-                                                    <p className="text-2xl md:text-3xl font-bold text-purple-600">{formatTND(parseFloat(coutMoyen))}</p>
+                                                    <p className="text-sm text-gray-500">Consommation moyenne</p>
+                                                    <p className="text-2xl md:text-3xl font-bold text-purple-600">{consommationMoyenne} L/100km</p>
                                                 </div>
-                                                <i className="fas fa-chart-trending-up text-purple-500 text-xl md:text-2xl"></i>
+                                                <i className="fas fa-gas-pump text-purple-500 text-xl md:text-2xl"></i>
                                             </div>
                                         </div>
                                     </div>
@@ -1199,6 +1303,188 @@
                                                 </button>
                                             </div>
                                         </form>
+                                    </div>
+                                </div>
+                            )}
+
+                            {currentView === 'consommation' && (
+                                <div key="consommation" className="animate-fade-in">
+                                    <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">Ajouter une consommation</h2>
+                                    
+                                    <div className="bg-white rounded-lg card p-4 md:p-6">
+                                        <form onSubmit={handleSubmitConso} className="space-y-4 md:space-y-6">
+                                            <div className="form-grid grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Type de carburant</label>
+                                                    <select
+                                                        value={formDataConso.type}
+                                                        onChange={(e) => {
+                                                            const newType = e.target.value;
+                                                            handleConsoChange('type', newType);
+                                                            if (newType === 'kiosque') {
+                                                                handleConsoChange('prixUnitaire', '2.525');
+                                                            }
+                                                        }}
+                                                        className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    >
+                                                        <option value="kiosque">Kiosque (1L = 2.525 TND)</option>
+                                                        <option value="hors-kiosque">Hors kiosque (prix variable)</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                                                    <input
+                                                        type="date"
+                                                        value={formDataConso.date}
+                                                        onChange={(e) => handleConsoChange('date', e.target.value)}
+                                                        className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        required
+                                                    />
+                                                </div>
+                                                
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Kilométrage avant</label>
+                                                    <input
+                                                        type="number"
+                                                        value={formDataConso.kmAvant}
+                                                        onChange={(e) => handleConsoChange('kmAvant', e.target.value)}
+                                                        className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="Kilométrage avant plein"
+                                                        required
+                                                    />
+                                                </div>
+                                                
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Kilométrage après</label>
+                                                    <input
+                                                        type="number"
+                                                        value={formDataConso.kmApres}
+                                                        onChange={(e) => handleConsoChange('kmApres', e.target.value)}
+                                                        className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="Kilométrage après plein"
+                                                        required
+                                                    />
+                                                </div>
+                                                
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Quantité (litres)</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={formDataConso.quantite}
+                                                        onChange={(e) => handleConsoChange('quantite', e.target.value)}
+                                                        className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="Quantité de carburant"
+                                                        required
+                                                    />
+                                                </div>
+                                                
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        {formDataConso.type === 'kiosque' ? 'Prix unitaire (fixe)' : 'Prix unitaire (TND/L)'}
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.001"
+                                                        value={formDataConso.prixUnitaire}
+                                                        onChange={(e) => handleConsoChange('prixUnitaire', e.target.value)}
+                                                        className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="Prix unitaire"
+                                                        readOnly={formDataConso.type === 'kiosque'}
+                                                        required
+                                                    />
+                                                    {formDataConso.type === 'kiosque' && (
+                                                        <p className="text-xs text-gray-500 mt-1">Prix fixe: 2.525 TND/L</p>
+                                                    )}
+                                                </div>
+                                                
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Montant total (TND)</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.001"
+                                                        value={formDataConso.montantTotal}
+                                                        onChange={(e) => handleConsoChange('montantTotal', e.target.value)}
+                                                        className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="Montant total"
+                                                        required
+                                                    />
+                                                </div>
+                                                
+                                                <div className="md:col-span-2">
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Station-service</label>
+                                                    <input
+                                                        type="text"
+                                                        value={formDataConso.station}
+                                                        onChange={(e) => handleConsoChange('station', e.target.value)}
+                                                        className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="Nom de la station-service"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+                                                <button
+                                                    type="submit"
+                                                    className="flex-1 bg-purple-600 text-white py-2 md:py-3 px-4 md:px-6 rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                                                >
+                                                    Ajouter la consommation
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setCurrentView('dashboard');
+                                                        setSidebarOpen(false);
+                                                    }}
+                                                    className="px-4 py-2 md:px-6 md:py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                                                >
+                                                    Annuler
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                    
+                                    {/* Historique des consommations */}
+                                    <div className="mt-8">
+                                        <h3 className="text-xl font-semibold mb-4">Historique des consommations</h3>
+                                        {consommations.length > 0 ? (
+                                            <div className="bg-white rounded-lg card overflow-hidden">
+                                                <div className="divide-y">
+                                                    {[...consommations].reverse().slice(0, 5).map(conso => (
+                                                        <div key={conso.id} className="p-3 md:p-4 hover:bg-gray-50 transition-colors">
+                                                            <div className="flex flex-col md:flex-row md:items-center justify-between space-y-2 md:space-y-0">
+                                                                <div className="flex items-center space-x-3">
+                                                                    <div className={`p-2 rounded-full ${getTypeColor('consommation')} text-white`}>
+                                                                        <i className={`fas ${getTypeIcon('consommation')}`}></i>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="font-semibold text-sm md:text-base">
+                                                                            {conso.type === 'kiosque' ? 'Kiosque' : 'Hors kiosque'}
+                                                                        </p>
+                                                                        <p className="text-xs text-gray-500">{conso.date} • {conso.station || 'Station inconnue'}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="font-semibold text-purple-600 text-sm md:text-base">
+                                                                        {conso.consommationAux100} L/100km
+                                                                    </p>
+                                                                    <p className="text-xs text-gray-500">
+                                                                        {conso.quantite}L • {formatTND(parseFloat(conso.montantTotal))}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-white rounded-lg card p-8 md:p-12 text-center">
+                                                <i className="fas fa-gas-pump text-gray-400 text-3xl md:text-4xl mx-auto mb-3"></i>
+                                                <p className="text-gray-600 text-sm md:text-base">Aucune consommation enregistrée</p>
+                                                <p className="text-gray-500 text-xs mt-2">Commencez par ajouter votre première consommation</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}
