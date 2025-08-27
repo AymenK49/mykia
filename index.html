@@ -68,9 +68,6 @@
                 margin-left: 0;
                 padding: 1rem;
             }
-            .mobile-menu-button {
-                display: block;
-            }
             .stats-grid {
                 grid-template-columns: 1fr;
             }
@@ -290,6 +287,7 @@
                     }
                 }
             };
+
             // Fonction de sauvegarde manuelle
             const saveToCloud = async () => {
                 if (database && user) {
@@ -314,6 +312,41 @@
                     setSyncMessage('Non connecté');
                 }
             };
+
+            // Fonction pour supprimer un entretien
+            const deleteEntretien = async (id) => {
+                if (confirm('Êtes-vous sûr de vouloir supprimer cet entretien ?')) {
+                    const updatedEntretiens = entretiens.filter(entretien => entretien.id !== id);
+                    setEntretiens(updatedEntretiens);
+                    if (database && user) {
+                        try {
+                            await database.ref(`users/${user.uid}/vehicleData/entretiens`).set(updatedEntretiens);
+                            setSyncMessage('Entretien supprimé');
+                        } catch (error) {
+                            console.error('Erreur de suppression Firebase:', error);
+                            setSyncMessage('Erreur de suppression');
+                        }
+                    }
+                }
+            };
+
+            // Fonction pour supprimer une consommation
+            const deleteConso = async (id) => {
+                if (confirm('Êtes-vous sûr de vouloir supprimer cette consommation ?')) {
+                    const updatedConsos = consommations.filter(conso => conso.id !== id);
+                    setConsommations(updatedConsos);
+                    if (database && user) {
+                        try {
+                            await database.ref(`users/${user.uid}/vehicleData/consommations`).set(updatedConsos);
+                            setSyncMessage('Consommation supprimée');
+                        } catch (error) {
+                            console.error('Erreur de suppression Firebase:', error);
+                            setSyncMessage('Erreur de suppression');
+                        }
+                    }
+                }
+            };
+
             // Calculs pour le tableau de bord
             const totalEntretiens = entretiens.length;
             const coutTotal = entretiens.reduce((sum, entretien) => sum + entretien.cout, 0);
@@ -321,7 +354,7 @@
             // Calcul de la consommation moyenne
             const calculerConsommationMoyenne = () => {
                 if (consommations.length === 0) return 0;
-                const validConsos = consommations.filter(conso => 
+                const validConsos = consommations.filter(conso =>
                     conso.consommationAux100 && !isNaN(parseFloat(conso.consommationAux100))
                 );
                 if (validConsos.length === 0) return 0;
@@ -452,7 +485,6 @@
             };
             const handleSubmitConso = (e) => {
                 e.preventDefault();
-                
                 // Trouver le kilométrage du dernier plein
                 let kmPrecedent = 0;
                 if (consommations.length > 0) {
@@ -460,29 +492,23 @@
                     const dernierPlein = consommations.reduce((prev, current) => (prev.kmAvant > current.kmAvant) ? prev : current);
                     kmPrecedent = parseInt(dernierPlein.kmAvant) || 0;
                 }
-                
                 const kmActuel = parseInt(formDataConso.kmAvant) || 0;
                 const kmParcourus = kmActuel - kmPrecedent;
-                
                 // Vérifier si kmParcourus est valide (positif)
                 if (kmParcourus <= 0) {
                     alert("Le kilométrage actuel doit être supérieur au kilométrage du plein précédent.");
                     return; // Empêcher la soumission
                 }
-                
                 const quantite = parseFloat(formDataConso.quantite);
-                const consommationAux100 = quantite && kmParcourus > 0 ? 
+                const consommationAux100 = quantite && kmParcourus > 0 ?
                     ((quantite / kmParcourus) * 100).toFixed(2) : 0;
-
                 const newConso = {
                     id: Date.now(),
                     ...formDataConso,
                     kmParcourus: kmParcourus, // Distance parcourue depuis le dernier plein
                     consommationAux100: consommationAux100 // Consommation calculée pour cette période
                 };
-
                 setConsommations([...consommations, newConso]);
-                
                 // Réinitialiser le formulaire
                 setFormDataConso({
                     type: 'kiosque',
@@ -493,7 +519,6 @@
                     montantTotal: '',
                     station: ''
                 });
-                
                 setCurrentView('dashboard');
                 setSidebarOpen(false);
             };
@@ -1363,6 +1388,16 @@
                                                                         {conso.quantite}L • {formatTND(parseFloat(conso.montantTotal))}
                                                                     </p>
                                                                 </div>
+                                                                {/* Bouton de suppression pour consommation */}
+                                                                <div className="text-right mt-2 md:mt-0">
+                                                                    <button
+                                                                        onClick={() => deleteConso(conso.id)}
+                                                                        className="text-red-500 hover:text-red-700 text-sm"
+                                                                        title="Supprimer"
+                                                                    >
+                                                                        <i className="fas fa-trash-alt"></i>
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     ))}
@@ -1486,6 +1521,16 @@
                                                                     </div>
                                                                 )}
                                                             </div>
+                                                            {/* Bouton de suppression pour entretien */}
+                                                            <div className="ml-2">
+                                                                <button
+                                                                    onClick={() => deleteEntretien(entretien.id)}
+                                                                    className="text-red-500 hover:text-red-700"
+                                                                    title="Supprimer"
+                                                                >
+                                                                    <i className="fas fa-trash-alt"></i>
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1495,8 +1540,8 @@
                                                 <i className="fas fa-history text-gray-400 text-3xl md:text-4xl mx-auto mb-3"></i>
                                                 <p className="text-gray-600 text-sm md:text-base">Aucun entretien trouvé</p>
                                                 <p className="text-gray-500 text-xs mt-2">
-                                                    {entretiens.length === 0 
-                                                        ? "Commencez par ajouter votre premier entretien" 
+                                                    {entretiens.length === 0
+                                                        ? "Commencez par ajouter votre premier entretien"
                                                         : "Aucun entretien correspond à vos critères de recherche"}
                                                 </p>
                                                 {entretiens.length === 0 && (
