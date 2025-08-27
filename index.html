@@ -57,6 +57,7 @@
             font-weight: 500;
             z-index: 1000;
         }
+        
         @media (max-width: 768px) {
             .sidebar {
                 display: none;
@@ -68,6 +69,9 @@
                 margin-left: 0;
                 padding: 1rem;
             }
+            .mobile-menu-button {
+                display: block;
+            }
             .stats-grid {
                 grid-template-columns: 1fr;
             }
@@ -78,6 +82,7 @@
                 grid-template-columns: 1fr;
             }
         }
+        
         @media (min-width: 769px) {
             .main-content {
                 margin-left: 16rem;
@@ -87,6 +92,7 @@
 </head>
 <body>
     <div id="root"></div>
+
     <script type="text/babel">
         // Configuration Firebase
         const firebaseConfig = {
@@ -99,10 +105,12 @@
           appId: "1:625511645256:web:da1b38436fbebe4a3b187d",
           measurementId: "G-2R4WRHQWK6"
         };
+
         // Initialiser Firebase
         let database = null;
         let auth = null;
         let firebaseInitialized = false;
+        
         try {
             if (typeof firebase !== 'undefined') {
                 const app = firebase.initializeApp(firebaseConfig);
@@ -116,8 +124,10 @@
         } catch (error) {
             console.error('Firebase initialization error:', error);
         }
+
         const { useState, useEffect } = React;
         const { motion, AnimatePresence } = window.FramerMotion || { motion: 'div', AnimatePresence: ({children}) => children };
+
         const App = () => {
             const [currentView, setCurrentView] = useState('dashboard');
             const [currentKilometrage, setCurrentKilometrage] = useState(0);
@@ -128,12 +138,14 @@
             const [syncMessage, setSyncMessage] = useState('');
             const [user, setUser] = useState(null);
             const [loading, setLoading] = useState(true);
+            
             // États pour l'authentification
             const [authMode, setAuthMode] = useState('login'); // 'login' ou 'register'
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
             const [confirmPassword, setConfirmPassword] = useState('');
             const [authError, setAuthError] = useState('');
+
             // États pour les formulaires
             const [formData, setFormData] = useState({
                 type: 'vidange',
@@ -149,18 +161,22 @@
                 },
                 notes: ''
             });
+
             const [formDataConso, setFormDataConso] = useState({
                 type: 'kiosque',
                 date: '',
                 kmAvant: '',
+                kmApres: '',
                 quantite: '',
                 prixUnitaire: '2.525',
                 montantTotal: '',
                 station: ''
             });
+
             const [searchTerm, setSearchTerm] = useState('');
             const [filterType, setFilterType] = useState('all');
             const [sidebarOpen, setSidebarOpen] = useState(false);
+
             // Gérer l'état d'authentification
             useEffect(() => {
                 if (auth) {
@@ -178,24 +194,30 @@
                     return () => unsubscribe();
                 }
             }, []);
+
             // Charger les données lorsque l'utilisateur est connecté
             useEffect(() => {
                 if (user && database) {
                     const loadData = async () => {
                         try {
                             console.log("Chargement des données depuis Firebase pour l'utilisateur:", user.uid);
+                            
                             // Charger les entretiens
                             const snapshotEntretiens = await database.ref(`users/${user.uid}/vehicleData/entretiens`).once('value');
                             const dataEntretiens = snapshotEntretiens.val();
+                            
                             // Charger les consommations
                             const snapshotConsos = await database.ref(`users/${user.uid}/vehicleData/consommations`).once('value');
                             const dataConsos = snapshotConsos.val();
+                            
                             if (dataEntretiens) {
                                 setEntretiens(dataEntretiens);
                             }
+                            
                             if (dataConsos) {
                                 setConsommations(dataConsos);
                             }
+                            
                             setIsOnline(true);
                             setSyncStatus('synchronisé');
                             setSyncMessage('Données chargées');
@@ -205,7 +227,9 @@
                             setSyncMessage('Erreur de chargement');
                         }
                     };
+                    
                     loadData();
+                    
                     // Écouter les changements en temps réel
                     const unsubscribeEntretiens = database.ref(`users/${user.uid}/vehicleData/entretiens`).on('value', (snapshot) => {
                         const data = snapshot.val();
@@ -217,6 +241,7 @@
                     }, (error) => {
                         console.error("Erreur d'écoute entretiens:", error);
                     });
+                    
                     const unsubscribeConsos = database.ref(`users/${user.uid}/vehicleData/consommations`).on('value', (snapshot) => {
                         const data = snapshot.val();
                         console.log("Consommations mises à jour:", data);
@@ -227,12 +252,14 @@
                     }, (error) => {
                         console.error("Erreur d'écoute consommations:", error);
                     });
+                    
                     return () => {
                         unsubscribeEntretiens();
                         unsubscribeConsos();
                     };
                 }
             }, [user]);
+
             // Fonction de connexion
             const handleLogin = async (e) => {
                 e.preventDefault();
@@ -251,6 +278,7 @@
                     }
                 }
             };
+
             // Fonction d'inscription
             const handleRegister = async (e) => {
                 e.preventDefault();
@@ -273,6 +301,7 @@
                     }
                 }
             };
+
             // Fonction de déconnexion
             const signOut = async () => {
                 if (auth) {
@@ -294,13 +323,16 @@
                     try {
                         setSyncStatus('sauvegarde...');
                         setSyncMessage('Sauvegarde en cours');
+                        
                         await database.ref(`users/${user.uid}/vehicleData`).update({
                             entretiens: entretiens,
                             consommations: consommations
                         });
+                        
                         setSyncStatus('synchronisé');
                         setSyncMessage('Données sauvegardées');
                         setTimeout(() => setSyncMessage(''), 3000);
+                        
                         console.log("Données sauvegardées avec succès");
                     } catch (error) {
                         console.error('Erreur de sauvegarde:', error);
@@ -313,60 +345,33 @@
                 }
             };
 
-            // Fonction pour supprimer un entretien
-            const deleteEntretien = async (id) => {
-                if (confirm('Êtes-vous sûr de vouloir supprimer cet entretien ?')) {
-                    const updatedEntretiens = entretiens.filter(entretien => entretien.id !== id);
-                    setEntretiens(updatedEntretiens);
-                    if (database && user) {
-                        try {
-                            await database.ref(`users/${user.uid}/vehicleData/entretiens`).set(updatedEntretiens);
-                            setSyncMessage('Entretien supprimé');
-                        } catch (error) {
-                            console.error('Erreur de suppression Firebase:', error);
-                            setSyncMessage('Erreur de suppression');
-                        }
-                    }
-                }
-            };
-
-            // Fonction pour supprimer une consommation
-            const deleteConso = async (id) => {
-                if (confirm('Êtes-vous sûr de vouloir supprimer cette consommation ?')) {
-                    const updatedConsos = consommations.filter(conso => conso.id !== id);
-                    setConsommations(updatedConsos);
-                    if (database && user) {
-                        try {
-                            await database.ref(`users/${user.uid}/vehicleData/consommations`).set(updatedConsos);
-                            setSyncMessage('Consommation supprimée');
-                        } catch (error) {
-                            console.error('Erreur de suppression Firebase:', error);
-                            setSyncMessage('Erreur de suppression');
-                        }
-                    }
-                }
-            };
-
             // Calculs pour le tableau de bord
             const totalEntretiens = entretiens.length;
             const coutTotal = entretiens.reduce((sum, entretien) => sum + entretien.cout, 0);
             const coutMoyen = totalEntretiens > 0 ? (coutTotal / totalEntretiens).toFixed(3) : 0;
+
             // Calcul de la consommation moyenne
             const calculerConsommationMoyenne = () => {
                 if (consommations.length === 0) return 0;
-                const validConsos = consommations.filter(conso =>
+                
+                const validConsos = consommations.filter(conso => 
                     conso.consommationAux100 && !isNaN(parseFloat(conso.consommationAux100))
                 );
+                
                 if (validConsos.length === 0) return 0;
+                
                 const total = validConsos.reduce((sum, conso) => sum + parseFloat(conso.consommationAux100), 0);
                 return (total / validConsos.length).toFixed(2);
             };
+
             const consommationMoyenne = calculerConsommationMoyenne();
+
             // Rappels - Vidange tous les 8000 km
             const rappels = entretiens.map(entretien => {
                 const ecart = currentKilometrage - entretien.prochaineEcheance;
                 let urgence = 'normal';
                 let message = '';
+                
                 if (ecart >= 0) {
                     urgence = 'en-retard';
                     message = `En retard de ${Math.abs(ecart)} km`;
@@ -377,8 +382,10 @@
                     urgence = 'bientot';
                     message = `Prévoir dans ${Math.abs(ecart)} km`;
                 }
+                
                 return { ...entretien, urgence, message };
             }).filter(rappel => rappel.urgence !== 'normal');
+
             // Ajouter rappel de vidange si aucun entretien n'existe
             const rappelsAffiches = [...rappels];
             if (entretiens.length === 0 && currentKilometrage > 0) {
@@ -387,6 +394,7 @@
                 if (ecart >= -3000) {
                     let urgence = 'normal';
                     let message = '';
+                    
                     if (ecart >= 0) {
                         urgence = 'en-retard';
                         message = `Vidange en retard de ${Math.abs(ecart)} km`;
@@ -397,6 +405,7 @@
                         urgence = 'bientot';
                         message = `Vidange prévoir dans ${Math.abs(ecart)} km`;
                     }
+                    
                     rappelsAffiches.push({
                         id: 'reminder-vidange',
                         type: 'vidange',
@@ -406,14 +415,17 @@
                     });
                 }
             }
+
             const entretiensFiltres = entretiens.filter(entretien => {
                 const matchesSearch = entretien.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                      entretien.garage.toLowerCase().includes(searchTerm.toLowerCase());
                 const matchesFilter = filterType === 'all' || entretien.type === filterType;
                 return matchesSearch && matchesFilter;
             });
+
             const handleSubmit = (e) => {
                 e.preventDefault();
+                
                 // Définir l'intervalle en fonction du type d'entretien
                 let intervalle = 8000; // par défaut pour vidange
                 switch(formData.type) {
@@ -436,6 +448,7 @@
                         intervalle = 90000;
                         break;
                 }
+                
                 const newEntretien = {
                     id: Date.now(),
                     ...formData,
@@ -461,9 +474,11 @@
                 setCurrentView('dashboard');
                 setSidebarOpen(false);
             };
+
             // Gestion du formulaire de consommation
             const handleConsoChange = (field, value) => {
                 const updatedData = { ...formDataConso, [field]: value };
+                
                 // Calcul automatique selon le type
                 if (updatedData.type === 'kiosque') {
                     updatedData.prixUnitaire = '2.525';
@@ -481,39 +496,31 @@
                         updatedData.prixUnitaire = (parseFloat(value) / parseFloat(updatedData.quantite)).toFixed(3);
                     }
                 }
+                
                 setFormDataConso(updatedData);
             };
+
             const handleSubmitConso = (e) => {
                 e.preventDefault();
-                // Trouver le kilométrage du dernier plein
-                let kmPrecedent = 0;
-                if (consommations.length > 0) {
-                    // Trouver le plein avec le kmAvant le plus élevé parmi ceux enregistrés
-                    const dernierPlein = consommations.reduce((prev, current) => (prev.kmAvant > current.kmAvant) ? prev : current);
-                    kmPrecedent = parseInt(dernierPlein.kmAvant) || 0;
-                }
-                const kmActuel = parseInt(formDataConso.kmAvant) || 0;
-                const kmParcourus = kmActuel - kmPrecedent;
-                // Vérifier si kmParcourus est valide (positif)
-                if (kmParcourus <= 0) {
-                    alert("Le kilométrage actuel doit être supérieur au kilométrage du plein précédent.");
-                    return; // Empêcher la soumission
-                }
-                const quantite = parseFloat(formDataConso.quantite);
-                const consommationAux100 = quantite && kmParcourus > 0 ?
-                    ((quantite / kmParcourus) * 100).toFixed(2) : 0;
+                
+                // Calculer la consommation aux 100km
+                const kmParcourus = parseInt(formDataConso.kmApres) - parseInt(formDataConso.kmAvant);
+                const consommationAux100 = kmParcourus > 0 && formDataConso.quantite ? 
+                    ((parseFloat(formDataConso.quantite) / kmParcourus) * 100).toFixed(2) : 0;
+                
                 const newConso = {
                     id: Date.now(),
                     ...formDataConso,
-                    kmParcourus: kmParcourus, // Distance parcourue depuis le dernier plein
-                    consommationAux100: consommationAux100 // Consommation calculée pour cette période
+                    kmParcourus: kmParcourus,
+                    consommationAux100: consommationAux100
                 };
+                
                 setConsommations([...consommations, newConso]);
-                // Réinitialiser le formulaire
                 setFormDataConso({
                     type: 'kiosque',
                     date: '',
                     kmAvant: '',
+                    kmApres: '',
                     quantite: '',
                     prixUnitaire: '2.525',
                     montantTotal: '',
@@ -522,6 +529,7 @@
                 setCurrentView('dashboard');
                 setSidebarOpen(false);
             };
+
             const getTypeIcon = (type) => {
                 switch(type) {
                     case 'vidange': return 'fa-oil-can';
@@ -532,6 +540,7 @@
                     default: return 'fa-wrench';
                 }
             };
+
             const getTypeColor = (type) => {
                 switch(type) {
                     case 'vidange': return 'bg-blue-500';
@@ -542,6 +551,7 @@
                     default: return 'bg-gray-500';
                 }
             };
+
             const getUrgenceColor = (urgence) => {
                 switch(urgence) {
                     case 'en-retard': return 'border-l-red-500 bg-red-50';
@@ -550,6 +560,7 @@
                     default: return 'border-l-gray-300 bg-gray-50';
                 }
             };
+
             const getTypeLabel = (type) => {
                 switch(type) {
                     case 'vidange': return 'Vidange';
@@ -562,6 +573,7 @@
                     default: return type;
                 }
             };
+
             // Fonction pour formater les montants en TND
             const formatTND = (amount) => {
                 return new Intl.NumberFormat('fr-TN', {
@@ -571,6 +583,7 @@
                     maximumFractionDigits: 3
                 }).format(amount);
             };
+
             // Fonction pour réinitialiser toutes les données
             const resetData = () => {
                 if (confirm('Êtes-vous sûr de vouloir réinitialiser toutes les données ?')) {
@@ -582,12 +595,14 @@
                     }
                 }
             };
+
             const menuItems = [
                 { id: 'dashboard', label: 'Tableau de bord', icon: 'fa-chart-line' },
                 { id: 'ajout', label: 'Ajouter entretien', icon: 'fa-plus' },
                 { id: 'consommation', label: 'Consommation', icon: 'fa-gas-pump' },
                 { id: 'historique', label: 'Historique', icon: 'fa-history' }
             ];
+
             // Couleurs de statut de synchronisation
             const getStatusColor = () => {
                 switch(syncStatus) {
@@ -606,6 +621,7 @@
                         return 'bg-yellow-500 text-white';
                 }
             };
+
             // Écran de chargement
             if (loading) {
                 return (
@@ -617,6 +633,7 @@
                     </div>
                 );
             }
+
             // Écran d'authentification
             if (!user) {
                 return (
@@ -627,14 +644,17 @@
                                 <h1 className="text-2xl font-bold text-gray-800">Suivi d'Entretien Véhicule</h1>
                                 <p className="text-gray-600">Gérez l'entretien de votre voiture</p>
                             </div>
+                            
                             {authMode === 'login' ? (
                                 <form onSubmit={handleLogin} className="space-y-4">
                                     <h2 className="text-xl font-semibold text-center mb-6">Connexion</h2>
+                                    
                                     {authError && (
                                         <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">
                                             {authError}
                                         </div>
                                     )}
+                                    
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                                         <input
@@ -646,6 +666,7 @@
                                             required
                                         />
                                     </div>
+                                    
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Mot de passe</label>
                                         <input
@@ -657,12 +678,14 @@
                                             required
                                         />
                                     </div>
+                                    
                                     <button
                                         type="submit"
                                         className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
                                     >
                                         Se connecter
                                     </button>
+                                    
                                     <div className="text-center mt-4">
                                         <button
                                             type="button"
@@ -679,11 +702,13 @@
                             ) : (
                                 <form onSubmit={handleRegister} className="space-y-4">
                                     <h2 className="text-xl font-semibold text-center mb-6">Inscription</h2>
+                                    
                                     {authError && (
                                         <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">
                                             {authError}
                                         </div>
                                     )}
+                                    
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                                         <input
@@ -695,6 +720,7 @@
                                             required
                                         />
                                     </div>
+                                    
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Mot de passe</label>
                                         <input
@@ -708,6 +734,7 @@
                                         />
                                         <p className="text-xs text-gray-500 mt-1">Minimum 6 caractères</p>
                                     </div>
+                                    
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Confirmer le mot de passe</label>
                                         <input
@@ -719,12 +746,14 @@
                                             required
                                         />
                                     </div>
+                                    
                                     <button
                                         type="submit"
                                         className="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium"
                                     >
                                         S'inscrire
                                     </button>
+                                    
                                     <div className="text-center mt-4">
                                         <button
                                             type="button"
@@ -739,6 +768,7 @@
                                     </div>
                                 </form>
                             )}
+                            
                             <div className="mt-6 text-center text-xs text-gray-500">
                                 Connectez-vous pour synchroniser vos données entre tous vos appareils
                             </div>
@@ -746,6 +776,7 @@
                     </div>
                 );
             }
+
             return (
                 <div className="min-h-screen bg-gray-50">
                     {/* Indicateur de synchronisation */}
@@ -754,6 +785,7 @@
                         <span className="ml-2">{syncStatus}</span>
                         {syncMessage && <span className="ml-2">• {syncMessage}</span>}
                     </div>
+
                     {/* Mobile menu button */}
                     <div className="mobile-menu-button fixed top-4 left-4 z-40">
                         <button
@@ -763,6 +795,7 @@
                             <i className="fas fa-bars text-gray-600"></i>
                         </button>
                     </div>
+
                     {/* Navigation latérale - Desktop */}
                     <div className="sidebar fixed left-0 top-0 h-full w-64 bg-white hidden md:block">
                         <div className="p-6 border-b">
@@ -777,6 +810,7 @@
                                 </div>
                             </div>
                         </div>
+                        
                         <nav className="mt-6">
                             {menuItems.map(item => (
                                 <button
@@ -793,6 +827,7 @@
                                     <span>{item.label}</span>
                                 </button>
                             ))}
+                            
                             {/* Boutons d'export/import */}
                             <div className="px-6 py-4 border-t mt-4">
                                 <button
@@ -802,6 +837,7 @@
                                     <i className="fas fa-cloud-upload-alt"></i>
                                     <span>Sauvegarder dans le cloud</span>
                                 </button>
+                                
                                 <button
                                     onClick={resetData}
                                     className="w-full flex items-center space-x-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 rounded"
@@ -810,6 +846,7 @@
                                     <span>Réinitialiser</span>
                                 </button>
                             </div>
+                            
                             {/* Déconnexion */}
                             <div className="px-6 py-4 border-t mt-4">
                                 <button
@@ -820,6 +857,7 @@
                                     <span>Déconnexion</span>
                                 </button>
                             </div>
+                            
                             {/* Informations de synchronisation */}
                             <div className="px-6 py-4 border-t mt-4 text-xs text-gray-500">
                                 <div className="flex items-center">
@@ -834,6 +872,7 @@
                             </div>
                         </nav>
                     </div>
+
                     {/* Navigation latérale - Mobile */}
                     {sidebarOpen && (
                         <div className="sidebar-mobile fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden">
@@ -858,6 +897,7 @@
                                         </button>
                                     </div>
                                 </div>
+                                
                                 <nav className="mt-6">
                                     {menuItems.map(item => (
                                         <button
@@ -874,6 +914,7 @@
                                             <span>{item.label}</span>
                                         </button>
                                     ))}
+                                    
                                     {/* Boutons d'export/import mobile */}
                                     <div className="px-6 py-4 border-t mt-4">
                                         <button
@@ -886,6 +927,7 @@
                                             <i className="fas fa-cloud-upload-alt"></i>
                                             <span>Sauvegarder</span>
                                         </button>
+                                        
                                         <button
                                             onClick={() => {
                                                 resetData();
@@ -897,6 +939,7 @@
                                             <span>Réinitialiser</span>
                                         </button>
                                     </div>
+                                    
                                     {/* Déconnexion mobile */}
                                     <div className="px-6 py-4 border-t mt-4">
                                         <button
@@ -910,6 +953,7 @@
                                             <span>Déconnexion</span>
                                         </button>
                                     </div>
+                                    
                                     {/* Informations de synchronisation mobile */}
                                     <div className="px-6 py-4 border-t mt-4 text-xs text-gray-500">
                                         <div className="flex items-center">
@@ -926,12 +970,14 @@
                             </div>
                         </div>
                     )}
+
                     {/* Contenu principal */}
                     <div className="main-content p-4 md:p-8 pt-20 md:pt-8">
                         <AnimatePresence mode="wait">
                             {currentView === 'dashboard' && (
                                 <div key="dashboard" className="animate-fade-in">
                                     <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">Tableau de bord</h2>
+                                    
                                     {/* Mise à jour kilométrage */}
                                     <div className="bg-white rounded-lg card p-4 md:p-6 mb-6">
                                         <h3 className="text-lg font-semibold mb-4">Kilométrage actuel</h3>
@@ -946,6 +992,7 @@
                                             <span className="text-xl md:text-2xl font-bold text-blue-600">{currentKilometrage.toLocaleString()} km</span>
                                         </div>
                                     </div>
+
                                     {/* Statistiques */}
                                     <div className="stats-grid grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6">
                                         <div className="bg-white rounded-lg card p-4 md:p-6 hover:shadow-lg transition-shadow">
@@ -957,6 +1004,7 @@
                                                 <i className="fas fa-wrench text-blue-500 text-xl md:text-2xl"></i>
                                             </div>
                                         </div>
+                                        
                                         <div className="bg-white rounded-lg card p-4 md:p-6 hover:shadow-lg transition-shadow">
                                             <div className="flex items-center justify-between">
                                                 <div>
@@ -966,6 +1014,7 @@
                                                 <i className="fas fa-money-bill-wave text-green-500 text-xl md:text-2xl"></i>
                                             </div>
                                         </div>
+                                        
                                         <div className="bg-white rounded-lg card p-4 md:p-6 hover:shadow-lg transition-shadow">
                                             <div className="flex items-center justify-between">
                                                 <div>
@@ -976,6 +1025,7 @@
                                             </div>
                                         </div>
                                     </div>
+
                                     {/* Rappels */}
                                     <div className="mb-6">
                                         <h3 className="text-lg md:text-xl font-semibold mb-4">Rappels importants</h3>
@@ -1012,6 +1062,7 @@
                                             </div>
                                         )}
                                     </div>
+
                                     {/* Entretiens récents */}
                                     <div>
                                         <h3 className="text-lg md:text-xl font-semibold mb-4">Entretiens récents</h3>
@@ -1055,9 +1106,11 @@
                                     </div>
                                 </div>
                             )}
+
                             {currentView === 'ajout' && (
                                 <div key="ajout" className="animate-fade-in">
                                     <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">Ajouter un entretien</h2>
+                                    
                                     <div className="bg-white rounded-lg card p-4 md:p-6">
                                         <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
                                             <div className="form-grid grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1076,6 +1129,7 @@
                                                         <option value="bougies">Bougies (90000 km)</option>
                                                     </select>
                                                 </div>
+                                                
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
                                                     <input
@@ -1086,6 +1140,7 @@
                                                         required
                                                     />
                                                 </div>
+                                                
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">Kilométrage</label>
                                                     <input
@@ -1097,6 +1152,7 @@
                                                         required
                                                     />
                                                 </div>
+                                                
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">Coût (TND)</label>
                                                     <input
@@ -1109,6 +1165,7 @@
                                                         required
                                                     />
                                                 </div>
+                                                
                                                 <div className="md:col-span-2">
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">Garage</label>
                                                     <input
@@ -1121,6 +1178,7 @@
                                                     />
                                                 </div>
                                             </div>
+
                                             {/* Section spécifique pour les vidanges */}
                                             {formData.type === 'vidange' && (
                                                 <div className="border-t pt-4 md:pt-6 animate-fade-in">
@@ -1153,6 +1211,7 @@
                                                                 <option value="Other">Autre</option>
                                                             </select>
                                                         </div>
+                                                        
                                                         <div>
                                                             <label className="block text-sm font-medium text-gray-700 mb-2">Viscosité</label>
                                                             <select
@@ -1177,6 +1236,7 @@
                                                             </select>
                                                         </div>
                                                     </div>
+                                                    
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                                         <div className="flex items-center">
                                                             <input
@@ -1193,6 +1253,7 @@
                                                                 Filtre à air changé
                                                             </label>
                                                         </div>
+                                                        
                                                         <div className="flex items-center">
                                                             <input
                                                                 type="checkbox"
@@ -1211,6 +1272,7 @@
                                                     </div>
                                                 </div>
                                             )}
+
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-2">Notes et observations</label>
                                                 <textarea
@@ -1221,6 +1283,7 @@
                                                     placeholder="Notes supplémentaires..."
                                                 />
                                             </div>
+
                                             <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
                                                 <button
                                                     type="submit"
@@ -1243,9 +1306,11 @@
                                     </div>
                                 </div>
                             )}
+
                             {currentView === 'consommation' && (
                                 <div key="consommation" className="animate-fade-in">
                                     <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">Ajouter une consommation</h2>
+                                    
                                     <div className="bg-white rounded-lg card p-4 md:p-6">
                                         <form onSubmit={handleSubmitConso} className="space-y-4 md:space-y-6">
                                             <div className="form-grid grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1266,6 +1331,7 @@
                                                         <option value="hors-kiosque">Hors kiosque (prix variable)</option>
                                                     </select>
                                                 </div>
+                                                
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
                                                     <input
@@ -1276,17 +1342,31 @@
                                                         required
                                                     />
                                                 </div>
+                                                
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Kilométrage au moment du plein</label>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Kilométrage avant</label>
                                                     <input
                                                         type="number"
                                                         value={formDataConso.kmAvant}
                                                         onChange={(e) => handleConsoChange('kmAvant', e.target.value)}
                                                         className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                        placeholder="Kilométrage au moment du plein"
+                                                        placeholder="Kilométrage avant plein"
                                                         required
                                                     />
                                                 </div>
+                                                
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Kilométrage après</label>
+                                                    <input
+                                                        type="number"
+                                                        value={formDataConso.kmApres}
+                                                        onChange={(e) => handleConsoChange('kmApres', e.target.value)}
+                                                        className="w-full px-3 py-2 md:px-4 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="Kilométrage après plein"
+                                                        required
+                                                    />
+                                                </div>
+                                                
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">Quantité (litres)</label>
                                                     <input
@@ -1299,6 +1379,7 @@
                                                         required
                                                     />
                                                 </div>
+                                                
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         {formDataConso.type === 'kiosque' ? 'Prix unitaire (fixe)' : 'Prix unitaire (TND/L)'}
@@ -1317,6 +1398,7 @@
                                                         <p className="text-xs text-gray-500 mt-1">Prix fixe: 2.525 TND/L</p>
                                                     )}
                                                 </div>
+                                                
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">Montant total (TND)</label>
                                                     <input
@@ -1329,6 +1411,7 @@
                                                         required
                                                     />
                                                 </div>
+                                                
                                                 <div className="md:col-span-2">
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">Station-service</label>
                                                     <input
@@ -1340,6 +1423,7 @@
                                                     />
                                                 </div>
                                             </div>
+
                                             <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
                                                 <button
                                                     type="submit"
@@ -1360,6 +1444,7 @@
                                             </div>
                                         </form>
                                     </div>
+                                    
                                     {/* Historique des consommations */}
                                     <div className="mt-8">
                                         <h3 className="text-xl font-semibold mb-4">Historique des consommations</h3>
@@ -1388,16 +1473,6 @@
                                                                         {conso.quantite}L • {formatTND(parseFloat(conso.montantTotal))}
                                                                     </p>
                                                                 </div>
-                                                                {/* Bouton de suppression pour consommation */}
-                                                                <div className="text-right mt-2 md:mt-0">
-                                                                    <button
-                                                                        onClick={() => deleteConso(conso.id)}
-                                                                        className="text-red-500 hover:text-red-700 text-sm"
-                                                                        title="Supprimer"
-                                                                    >
-                                                                        <i className="fas fa-trash-alt"></i>
-                                                                    </button>
-                                                                </div>
                                                             </div>
                                                         </div>
                                                     ))}
@@ -1413,9 +1488,11 @@
                                     </div>
                                 </div>
                             )}
+
                             {currentView === 'historique' && (
                                 <div key="historique" className="animate-fade-in">
                                     <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">Historique des entretiens</h2>
+                                    
                                     {/* Filtres et recherche */}
                                     <div className="bg-white rounded-lg card p-4 md:p-6 mb-6">
                                         <div className="flex flex-col md:flex-row md:items-center space-y-3 md:space-y-0 md:space-x-4">
@@ -1431,6 +1508,7 @@
                                                     />
                                                 </div>
                                             </div>
+                                            
                                             <div className="flex items-center space-x-2">
                                                 <i className="fas fa-filter text-gray-500 text-sm"></i>
                                                 <select
@@ -1447,6 +1525,7 @@
                                             </div>
                                         </div>
                                     </div>
+
                                     {/* Liste des entretiens */}
                                     <div className="space-y-3 md:space-y-4">
                                         {entretiensFiltres.length > 0 ? (
@@ -1466,6 +1545,7 @@
                                                                     <span className="text-xs text-gray-500">•</span>
                                                                     <span className="text-xs text-gray-500">{entretien.date}</span>
                                                                 </div>
+                                                                
                                                                 <div className="history-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-4">
                                                                     <div>
                                                                         <p className="text-xs text-gray-500">Kilométrage</p>
@@ -1484,6 +1564,7 @@
                                                                         <p className="font-medium text-sm">{entretien.prochaineEcheance.toLocaleString()} km</p>
                                                                     </div>
                                                                 </div>
+
                                                                 {/* Détails spécifiques */}
                                                                 {entretien.type === 'vidange' && entretien.details && entretien.details.marque && (
                                                                     <div className="bg-blue-50 rounded-lg p-3 md:p-4 mb-3">
@@ -1514,22 +1595,13 @@
                                                                         </div>
                                                                     </div>
                                                                 )}
+
                                                                 {entretien.notes && (
                                                                     <div>
                                                                         <p className="text-xs text-gray-500">Notes:</p>
                                                                         <p className="text-gray-700 text-sm">{entretien.notes}</p>
                                                                     </div>
                                                                 )}
-                                                            </div>
-                                                            {/* Bouton de suppression pour entretien */}
-                                                            <div className="ml-2">
-                                                                <button
-                                                                    onClick={() => deleteEntretien(entretien.id)}
-                                                                    className="text-red-500 hover:text-red-700"
-                                                                    title="Supprimer"
-                                                                >
-                                                                    <i className="fas fa-trash-alt"></i>
-                                                                </button>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1540,8 +1612,8 @@
                                                 <i className="fas fa-history text-gray-400 text-3xl md:text-4xl mx-auto mb-3"></i>
                                                 <p className="text-gray-600 text-sm md:text-base">Aucun entretien trouvé</p>
                                                 <p className="text-gray-500 text-xs mt-2">
-                                                    {entretiens.length === 0
-                                                        ? "Commencez par ajouter votre premier entretien"
+                                                    {entretiens.length === 0 
+                                                        ? "Commencez par ajouter votre premier entretien" 
                                                         : "Aucun entretien correspond à vos critères de recherche"}
                                                 </p>
                                                 {entretiens.length === 0 && (
@@ -1562,6 +1634,7 @@
                 </div>
             );
         };
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
