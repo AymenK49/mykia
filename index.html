@@ -57,18 +57,6 @@
             font-weight: 500;
             z-index: 1000;
         }
-        .delete-button {
-            color: #ef4444; /* Tailwind red-500 */
-            background-color: transparent;
-            border: none;
-            cursor: pointer;
-            padding: 0.25rem;
-            border-radius: 0.25rem; /* Rounded */
-            transition: background-color 0.2s ease;
-        }
-        .delete-button:hover {
-            background-color: #fee2e2; /* Tailwind red-100 */
-        }
         @media (max-width: 768px) {
             .sidebar {
                 display: none;
@@ -79,6 +67,9 @@
             .main-content {
                 margin-left: 0;
                 padding: 1rem;
+            }
+            .mobile-menu-button {
+                display: block;
             }
             .stats-grid {
                 grid-template-columns: 1fr;
@@ -299,27 +290,6 @@
                     }
                 }
             };
-
-            // Fonction pour supprimer un entretien
-            const deleteEntretien = (id) => {
-                if (window.confirm("Êtes-vous sûr de vouloir supprimer cet entretien ?")) {
-                    const updatedEntretiens = entretiens.filter(entretien => entretien.id !== id);
-                    setEntretiens(updatedEntretiens);
-                    // Si vous voulez aussi supprimer du cloud, vous pouvez appeler saveToCloud ici
-                    // saveToCloud(); // Décommentez si vous voulez une sauvegarde automatique
-                }
-            };
-
-            // Fonction pour supprimer une consommation
-            const deleteConsommation = (id) => {
-                if (window.confirm("Êtes-vous sûr de vouloir supprimer cette consommation ?")) {
-                    const updatedConsommations = consommations.filter(conso => conso.id !== id);
-                    setConsommations(updatedConsommations);
-                    // Si vous voulez aussi supprimer du cloud, vous pouvez appeler saveToCloud ici
-                    // saveToCloud(); // Décommentez si vous voulez une sauvegarde automatique
-                }
-            };
-
             // Fonction de sauvegarde manuelle
             const saveToCloud = async () => {
                 if (database && user) {
@@ -351,7 +321,7 @@
             // Calcul de la consommation moyenne
             const calculerConsommationMoyenne = () => {
                 if (consommations.length === 0) return 0;
-                const validConsos = consommations.filter(conso =>
+                const validConsos = consommations.filter(conso => 
                     conso.consommationAux100 && !isNaN(parseFloat(conso.consommationAux100))
                 );
                 if (validConsos.length === 0) return 0;
@@ -482,6 +452,7 @@
             };
             const handleSubmitConso = (e) => {
                 e.preventDefault();
+                
                 // Trouver le kilométrage du dernier plein
                 let kmPrecedent = 0;
                 if (consommations.length > 0) {
@@ -489,23 +460,29 @@
                     const dernierPlein = consommations.reduce((prev, current) => (prev.kmAvant > current.kmAvant) ? prev : current);
                     kmPrecedent = parseInt(dernierPlein.kmAvant) || 0;
                 }
+                
                 const kmActuel = parseInt(formDataConso.kmAvant) || 0;
                 const kmParcourus = kmActuel - kmPrecedent;
+                
                 // Vérifier si kmParcourus est valide (positif)
                 if (kmParcourus <= 0) {
                     alert("Le kilométrage actuel doit être supérieur au kilométrage du plein précédent.");
                     return; // Empêcher la soumission
                 }
+                
                 const quantite = parseFloat(formDataConso.quantite);
-                const consommationAux100 = quantite && kmParcourus > 0 ?
+                const consommationAux100 = quantite && kmParcourus > 0 ? 
                     ((quantite / kmParcourus) * 100).toFixed(2) : 0;
+
                 const newConso = {
                     id: Date.now(),
                     ...formDataConso,
                     kmParcourus: kmParcourus, // Distance parcourue depuis le dernier plein
                     consommationAux100: consommationAux100 // Consommation calculée pour cette période
                 };
+
                 setConsommations([...consommations, newConso]);
+                
                 // Réinitialiser le formulaire
                 setFormDataConso({
                     type: 'kiosque',
@@ -516,6 +493,7 @@
                     montantTotal: '',
                     station: ''
                 });
+                
                 setCurrentView('dashboard');
                 setSidebarOpen(false);
             };
@@ -1016,7 +994,7 @@
                                             <div className="bg-white rounded-lg card overflow-hidden">
                                                 <div className="divide-y">
                                                     {entretiens.slice(0, 3).map(entretien => (
-                                                        <div key={entretien.id} className="p-3 md:p-4 hover:bg-gray-50 transition-colors relative"> {/* Ajout de relative pour le positionnement absolu du bouton */}
+                                                        <div key={entretien.id} className="p-3 md:p-4 hover:bg-gray-50 transition-colors">
                                                             <div className="flex flex-col md:flex-row md:items-center justify-between space-y-2 md:space-y-0">
                                                                 <div className="flex items-center space-x-3">
                                                                     <div className={`p-2 rounded-full ${getTypeColor(entretien.type)} text-white`}>
@@ -1027,19 +1005,9 @@
                                                                         <p className="text-xs text-gray-500">{entretien.date} • {entretien.garage}</p>
                                                                     </div>
                                                                 </div>
-                                                                <div className="flex items-center space-x-2"> {/* Conteneur pour le coût et le bouton de suppression */}
-                                                                    <div className="text-right">
-                                                                        <p className="font-semibold text-green-600 text-sm md:text-base">{formatTND(entretien.cout)}</p>
-                                                                        <p className="text-xs text-gray-500">{entretien.kilometrage.toLocaleString()} km</p>
-                                                                    </div>
-                                                                    {/* Bouton de suppression pour entretien récent */}
-                                                                    <button
-                                                                        onClick={() => deleteEntretien(entretien.id)}
-                                                                        className="delete-button ml-2" // Ajout de ml-2 pour l'espacement
-                                                                        title="Supprimer cet entretien"
-                                                                    >
-                                                                        <i className="fas fa-trash-alt text-sm"></i> {/* Icône de corbeille */}
-                                                                    </button>
+                                                                <div className="text-right">
+                                                                    <p className="font-semibold text-green-600 text-sm md:text-base">{formatTND(entretien.cout)}</p>
+                                                                    <p className="text-xs text-gray-500">{entretien.kilometrage.toLocaleString()} km</p>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -1374,7 +1342,7 @@
                                             <div className="bg-white rounded-lg card overflow-hidden">
                                                 <div className="divide-y">
                                                     {[...consommations].reverse().slice(0, 5).map(conso => (
-                                                        <div key={conso.id} className="p-3 md:p-4 hover:bg-gray-50 transition-colors relative"> {/* Ajout de relative */}
+                                                        <div key={conso.id} className="p-3 md:p-4 hover:bg-gray-50 transition-colors">
                                                             <div className="flex flex-col md:flex-row md:items-center justify-between space-y-2 md:space-y-0">
                                                                 <div className="flex items-center space-x-3">
                                                                     <div className={`p-2 rounded-full ${getTypeColor('consommation')} text-white`}>
@@ -1387,23 +1355,13 @@
                                                                         <p className="text-xs text-gray-500">{conso.date} • {conso.station || 'Station inconnue'}</p>
                                                                     </div>
                                                                 </div>
-                                                                <div className="flex items-center space-x-2"> {/* Conteneur pour la conso et le bouton de suppression */}
-                                                                    <div className="text-right">
-                                                                        <p className="font-semibold text-purple-600 text-sm md:text-base">
-                                                                            {conso.consommationAux100} L/100km
-                                                                        </p>
-                                                                        <p className="text-xs text-gray-500">
-                                                                            {conso.quantite}L • {formatTND(parseFloat(conso.montantTotal))}
-                                                                        </p>
-                                                                    </div>
-                                                                    {/* Bouton de suppression pour consommation */}
-                                                                    <button
-                                                                        onClick={() => deleteConsommation(conso.id)}
-                                                                        className="delete-button ml-2" // Ajout de ml-2 pour l'espacement
-                                                                        title="Supprimer cette consommation"
-                                                                    >
-                                                                        <i className="fas fa-trash-alt text-sm"></i> {/* Icône de corbeille */}
-                                                                    </button>
+                                                                <div className="text-right">
+                                                                    <p className="font-semibold text-purple-600 text-sm md:text-base">
+                                                                        {conso.consommationAux100} L/100km
+                                                                    </p>
+                                                                    <p className="text-xs text-gray-500">
+                                                                        {conso.quantite}L • {formatTND(parseFloat(conso.montantTotal))}
+                                                                    </p>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -1460,17 +1418,8 @@
                                             entretiensFiltres.map(entretien => (
                                                 <div
                                                     key={entretien.id}
-                                                    className="bg-white rounded-lg card p-4 md:p-6 animate-fade-in relative" // Ajout de relative
+                                                    className="bg-white rounded-lg card p-4 md:p-6 animate-fade-in"
                                                 >
-                                                    {/* Bouton de suppression en haut à droite de l'entretien */}
-                                                    <button
-                                                        onClick={() => deleteEntretien(entretien.id)}
-                                                        className="delete-button absolute top-3 right-3 md:top-4 md:right-4" // Positionnement absolu
-                                                        title="Supprimer cet entretien"
-                                                    >
-                                                        <i className="fas fa-trash-alt text-sm"></i> {/* Icône de corbeille */}
-                                                    </button>
-
                                                     <div className="flex flex-col">
                                                         <div className="flex items-start space-x-3 mb-3">
                                                             <div className={`p-2 md:p-3 rounded-full ${getTypeColor(entretien.type)} text-white`}>
@@ -1546,8 +1495,8 @@
                                                 <i className="fas fa-history text-gray-400 text-3xl md:text-4xl mx-auto mb-3"></i>
                                                 <p className="text-gray-600 text-sm md:text-base">Aucun entretien trouvé</p>
                                                 <p className="text-gray-500 text-xs mt-2">
-                                                    {entretiens.length === 0
-                                                        ? "Commencez par ajouter votre premier entretien"
+                                                    {entretiens.length === 0 
+                                                        ? "Commencez par ajouter votre premier entretien" 
                                                         : "Aucun entretien correspond à vos critères de recherche"}
                                                 </p>
                                                 {entretiens.length === 0 && (
